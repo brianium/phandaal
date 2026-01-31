@@ -232,13 +232,76 @@ Phandaal detects when files exceed a line threshold but does not prescribe what 
     (println "File exceeds 500 lines, consider splitting")))
 ```
 
-## Pending Reloads
+## Reload Tracking
 
-Effects track which namespaces need reloading in dispatch-data. Access via placeholder:
+Phandaal automatically tracks which namespaces need reloading after file modifications and provides pluggable reload execution.
+
+### Setup
 
 ```clojure
-;; In an effect or action that needs the pending reloads
+(require '[ascolais.phandaal :as phandaal]
+         '[ascolais.phandaal.reload :as reload]
+         '[ascolais.sandestin :as s])
+
+(def dispatch
+  (s/create-dispatch
+   [[phandaal/registry {:project-root "/project"
+                        :source-paths ["src/clj"]
+                        :reload-executor reload/clj-reload}]
+    {::s/interceptors [phandaal/pending-reloads-interceptor]}]))
+```
+
+### Reload Executors
+
+| Executor | Best For | Handles State | Dependency Order |
+|----------|----------|---------------|------------------|
+| `reload/clj-reload` | Stateful systems | Yes | Yes |
+| `reload/tools-namespace` | Simple projects | No | Yes |
+| `reload/require-reload` | Quick iterations | No | No |
+| `reload/noop` | Manual control | N/A | N/A |
+
+### Usage
+
+```clojure
+;; Make file changes
+(dispatch {} {} [[::phandaal/write {:path "src/app/core.clj" :content "..."}]
+                 [::phandaal/write {:path "src/app/routes.clj" :content "..."}]])
+
+;; Reload all pending namespaces
+(dispatch {} {} [[::phandaal/reload {}]])
+;; => {:executor :clj-reload
+;;     :requested #{app.core app.routes}
+;;     :reloaded #{app.core app.routes}
+;;     :pending-remaining #{}}
+
+;; Reload specific namespaces
+(dispatch {} {} [[::phandaal/reload {:only #{app.core}}]])
+
+;; Clear pending without reloading
+(dispatch {} {} [[::phandaal/clear-pending {:all true}]])
+(dispatch {} {} [[::phandaal/clear-pending {:only #{app.core}}]])
+```
+
+### Access Pending Reloads
+
+Access via placeholder in effects:
+
+```clojure
 [::my-effect [::phandaal/pending-reloads]]
+```
+
+### Custom Executor
+
+```clojure
+(phandaal/registry
+  {:project-root "/project"
+   :reload-executor
+   {:type :custom
+    :reload-fn (fn [namespaces]
+                 (my-reload-system namespaces)
+                 {:reloaded (set namespaces)
+                  :failed {}
+                  :skipped #{}})}})
 ```
 
 ## Audit Logging
