@@ -176,26 +176,26 @@
                     [:content {:description "Complete file contents to write"} :string]
                     [:create-dirs? {:optional true :description "Create parent directories if they don't exist (default false)"} :boolean]
                     [:threshold {:optional true :description "Line count limit; if exceeded, :threshold in result shows details"} :int]]]
-       :returns file-result-schema
-       :examples [{:desc "Write a new Clojure namespace"
-                   :effect [::write {:path "/project/src/app/core.clj"
-                                     :content "(ns app.core)\n\n(defn greet [name]\n  (str \"Hello, \" name))"
-                                     :create-dirs? true}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :created
-                             :hints []
-                             :loc {:before nil :after 4 :delta nil}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}
-                  {:desc "Write with threshold check"
-                   :effect [::write {:path "/project/src/app/big.clj"
-                                     :content "(ns app.big)\n;; ... 150 lines ..."
-                                     :threshold 100}]
-                   :returns {:path "/project/src/app/big.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 50 :after 150 :delta 100}
-                             :threshold {:limit 100 :exceeded? true :remaining -50}
-                             :reload {:namespaces ['app.big] :type :clj-reload}}}]
+       ::returns file-result-schema
+       ::examples [{:desc "Write a new Clojure namespace"
+                    :effect [::write {:path "/project/src/app/core.clj"
+                                      :content "(ns app.core)\n\n(defn greet [name]\n  (str \"Hello, \" name))"
+                                      :create-dirs? true}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :created
+                              :hints []
+                              :loc {:before nil :after 4 :delta nil}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}
+                   {:desc "Write with threshold check"
+                    :effect [::write {:path "/project/src/app/big.clj"
+                                      :content "(ns app.big)\n;; ... 150 lines ..."
+                                      :threshold 100}]
+                    :returns {:path "/project/src/app/big.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 50 :after 150 :delta 100}
+                              :threshold {:limit 100 :exceeded? true :remaining -50}
+                              :reload {:namespaces ['app.big] :type :clj-reload}}}]
        ::s/handler (effects/make-write-handler opts)}
 
       ::append
@@ -206,19 +206,19 @@
                     [:path {:description "Absolute path to the target file"} :string]
                     [:content {:description "Content to append (include leading newline if needed)"} :string]
                     [:threshold {:optional true :description "Line count limit for the resulting file"} :int]]]
-       :returns file-result-schema
-       :examples [{:desc "Append a function to existing file"
-                   :effect [::append {:path "/project/src/app/core.clj"
-                                      :content "\n\n(defn farewell [name]\n  (str \"Goodbye, \" name))"}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 4 :after 7 :delta 3}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
+       ::returns file-result-schema
+       ::examples [{:desc "Append a function to existing file"
+                    :effect [::append {:path "/project/src/app/core.clj"
+                                       :content "\n\n(defn farewell [name]\n  (str \"Goodbye, \" name))"}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 4 :after 7 :delta 3}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-append-handler opts)}
 
       ::insert
-      {::s/description "Insert content at a specific location in an existing file. Location is specified via :at with one of: {:line N} for 1-based line number, {:after pattern} to insert after first matching line, or {:before pattern} to insert before first matching line. Patterns can be literal strings or regex patterns."
+      {::s/description "Insert content at a specific location in an existing file. Location is specified via :at with one of: {:line N} for 1-based line number, {:after pattern} to insert after first matching line, or {:before pattern} to insert before first matching line. Patterns can be literal strings or regex patterns. Tracks line counts and optionally checks against a threshold limit."
        ::s/schema [:tuple
                    [:= ::insert]
                    [:map
@@ -232,25 +232,25 @@
                       [:map [:before {:description "Insert before first line matching this string or regex"}
                              [:or :string [:fn {:description "java.util.regex.Pattern"} #(instance? java.util.regex.Pattern %)]]]]]]
                     [:threshold {:optional true :description "Line count limit for the resulting file"} :int]]]
-       :returns file-result-schema
-       :examples [{:desc "Insert after namespace declaration"
-                   :effect [::insert {:path "/project/src/app/core.clj"
-                                      :content "\n(require '[clojure.string :as str])"
-                                      :at {:after "(ns app.core)"}}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 4 :after 6 :delta 2}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}
-                  {:desc "Insert at specific line"
-                   :effect [::insert {:path "/project/src/app/core.clj"
-                                      :content ";; Copyright 2024"
-                                      :at {:line 1}}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 4 :after 5 :delta 1}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
+       ::returns file-result-schema
+       ::examples [{:desc "Insert after namespace declaration"
+                    :effect [::insert {:path "/project/src/app/core.clj"
+                                       :content "\n(require '[clojure.string :as str])"
+                                       :at {:after "(ns app.core)"}}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 4 :after 6 :delta 2}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}
+                   {:desc "Insert at specific line"
+                    :effect [::insert {:path "/project/src/app/core.clj"
+                                       :content ";; Copyright 2024"
+                                       :at {:line 1}}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 4 :after 5 :delta 1}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-insert-handler opts)}
 
       ::replace
@@ -263,27 +263,27 @@
                      [:or :string [:fn {:description "java.util.regex.Pattern"} #(instance? java.util.regex.Pattern %)]]]
                     [:replacement {:description "Text to replace matches with"} :string]
                     [:all? {:optional true :description "Replace all occurrences (default false, first match only)"} :boolean]]]
-       :returns file-result-schema
-       :examples [{:desc "Rename a function"
-                   :effect [::replace {:path "/project/src/app/core.clj"
-                                       :find "defn greet"
-                                       :replacement "defn say-hello"
-                                       :all? true}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 4 :after 4 :delta 0}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}
-                  {:desc "Replace with regex"
-                   :effect [::replace {:path "/project/src/app/core.clj"
-                                       :find #"TODO:.*"
-                                       :replacement "DONE"
-                                       :all? true}]
-                   :returns {:path "/project/src/app/core.clj"
-                             :status :ok
-                             :hints []
-                             :loc {:before 10 :after 8 :delta -2}
-                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
+       ::returns file-result-schema
+       ::examples [{:desc "Rename a function"
+                    :effect [::replace {:path "/project/src/app/core.clj"
+                                        :find "defn greet"
+                                        :replacement "defn say-hello"
+                                        :all? true}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 4 :after 4 :delta 0}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}
+                   {:desc "Replace with regex"
+                    :effect [::replace {:path "/project/src/app/core.clj"
+                                        :find #"TODO:.*"
+                                        :replacement "DONE"
+                                        :all? true}]
+                    :returns {:path "/project/src/app/core.clj"
+                              :status :ok
+                              :hints []
+                              :loc {:before 10 :after 8 :delta -2}
+                              :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-replace-handler opts)}
 
       ::read-meta
@@ -291,18 +291,18 @@
        ::s/schema [:tuple
                    [:= ::read-meta]
                    [:string {:description "Absolute path to the file to inspect"}]]
-       :returns read-meta-result-schema
-       :examples [{:desc "Check existing Clojure file"
-                   :effect [::read-meta "/project/src/app/core.clj"]
-                   :returns {:path "/project/src/app/core.clj"
-                             :exists? true
-                             :loc 42
-                             :modified #inst "2024-01-15T10:30:00Z"
-                             :namespace 'app.core}}
-                  {:desc "Check non-existent file"
-                   :effect [::read-meta "/project/src/app/missing.clj"]
-                   :returns {:path "/project/src/app/missing.clj"
-                             :exists? false}}]
+       ::returns read-meta-result-schema
+       ::examples [{:desc "Check existing Clojure file"
+                    :effect [::read-meta "/project/src/app/core.clj"]
+                    :returns {:path "/project/src/app/core.clj"
+                              :exists? true
+                              :loc 42
+                              :modified #inst "2024-01-15T10:30:00Z"
+                              :namespace 'app.core}}
+                   {:desc "Check non-existent file"
+                    :effect [::read-meta "/project/src/app/missing.clj"]
+                    :returns {:path "/project/src/app/missing.clj"
+                              :exists? false}}]
        ::s/handler (effects/make-read-meta-handler opts)}
 
       ::reload
@@ -312,24 +312,24 @@
                    [:map
                     [:only {:optional true :description "Subset of pending namespaces to reload; omit to reload all pending"}
                      [:set :symbol]]]]
-       :returns reload-result-schema
-       :see-also [::clear-pending ::pending-reloads]
-       :examples [{:desc "Reload all pending namespaces"
-                   :effect [::reload {}]
-                   :returns {:executor :clj-reload
-                             :requested #{'app.core 'app.routes}
-                             :reloaded #{'app.core 'app.routes}
-                             :failed {}
-                             :skipped #{}
-                             :pending-remaining #{}}}
-                  {:desc "Reload specific namespace only"
-                   :effect [::reload {:only #{'app.core}}]
-                   :returns {:executor :clj-reload
-                             :requested #{'app.core}
-                             :reloaded #{'app.core}
-                             :failed {}
-                             :skipped #{}
-                             :pending-remaining #{'app.routes}}}]
+       ::returns reload-result-schema
+       ::see-also [::clear-pending ::pending-reloads]
+       ::examples [{:desc "Reload all pending namespaces"
+                    :effect [::reload {}]
+                    :returns {:executor :clj-reload
+                              :requested #{'app.core 'app.routes}
+                              :reloaded #{'app.core 'app.routes}
+                              :failed {}
+                              :skipped #{}
+                              :pending-remaining #{}}}
+                   {:desc "Reload specific namespace only"
+                    :effect [::reload {:only #{'app.core}}]
+                    :returns {:executor :clj-reload
+                              :requested #{'app.core}
+                              :reloaded #{'app.core}
+                              :failed {}
+                              :skipped #{}
+                              :pending-remaining #{'app.routes}}}]
        ::s/handler (make-reload-handler opts)}
 
       ::clear-pending
@@ -340,26 +340,26 @@
                     [:only {:optional true :description "Specific namespaces to remove from pending set"}
                      [:set :symbol]]
                     [:all {:optional true :description "Clear all pending namespaces (default false)"} :boolean]]]
-       :returns clear-pending-result-schema
-       :see-also [::reload ::pending-reloads]
-       :examples [{:desc "Clear all pending"
-                   :effect [::clear-pending {:all true}]
-                   :returns {:cleared #{'app.core 'app.routes}
-                             :remaining #{}}}
-                  {:desc "Clear specific namespace"
-                   :effect [::clear-pending {:only #{'app.core}}]
-                   :returns {:cleared #{'app.core}
-                             :remaining #{'app.routes}}}]
+       ::returns clear-pending-result-schema
+       ::see-also [::reload ::pending-reloads]
+       ::examples [{:desc "Clear all pending"
+                    :effect [::clear-pending {:all true}]
+                    :returns {:cleared #{'app.core 'app.routes}
+                              :remaining #{}}}
+                   {:desc "Clear specific namespace"
+                    :effect [::clear-pending {:only #{'app.core}}]
+                    :returns {:cleared #{'app.core}
+                              :remaining #{'app.routes}}}]
        ::s/handler (make-clear-pending-handler opts)}}
 
      ::s/placeholders
      {::pending-reloads
       {::s/description "Returns the set of namespace symbols pending reload. Namespaces are added automatically when file effects modify Clojure source files (.clj, .cljc, .cljs). Use ::reload to reload them or ::clear-pending to discard. Requires pending-reloads-interceptor in the dispatch chain."
-       :returns [:set :symbol]
-       :see-also [::reload ::clear-pending]
-       :examples [{:desc "Check pending namespaces"
-                   :usage "[::pending-reloads]"
-                   :returns #{'app.core 'app.routes}}]
+       ::returns [:set :symbol]
+       ::see-also [::reload ::clear-pending]
+       ::examples [{:desc "Check pending namespaces"
+                    :usage "[::pending-reloads]"
+                    :returns #{'app.core 'app.routes}}]
        ::s/handler (fn [dispatch-data]
                      (when-let [atom (::pending-reloads-atom dispatch-data)]
                        @atom))}}}))
