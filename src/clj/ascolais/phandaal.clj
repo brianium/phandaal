@@ -81,6 +81,61 @@
         {:cleared #{}
          :remaining pending}))))
 
+;; =============================================================================
+;; Shared Schemas
+;; =============================================================================
+
+(def ^:private file-result-schema
+  "Schema for file operation results returned by write, append, insert, replace."
+  [:map
+   [:path {:description "Absolute path to the file that was modified"} :string]
+   [:status {:description "Operation outcome: :ok (modified existing), :created (new file), :error (failed)"}
+    [:enum :ok :created :error]]
+   [:hints {:description "Vector of threshold hints when limits exceeded (empty otherwise)"}
+    [:vector :any]]
+   [:loc {:description "Line count metrics for the operation" :optional true}
+    [:map
+     [:before {:description "Lines before operation (nil for new files)"} [:maybe :int]]
+     [:after {:description "Lines after operation"} :int]
+     [:delta {:description "Change in line count (nil if :before was nil)"} [:maybe :int]]]]
+   [:threshold {:description "Threshold check result (present only if :threshold arg provided)" :optional true}
+    [:map
+     [:limit {:description "The configured line limit"} :int]
+     [:exceeded? {:description "True if file exceeds the limit"} :boolean]
+     [:remaining {:description "Lines remaining before limit (negative if exceeded)"} :int]]]
+   [:reload {:description "Namespace reload info for Clojure source files" :optional true}
+    [:map
+     [:namespaces {:description "Namespace symbols affected by this change"} [:vector :symbol]]
+     [:type {:description "Reload executor type (:clj-reload, :tools-namespace, etc.)"} :keyword]]]
+   [:formatted? {:description "True if a formatter was run on the file" :optional true} :boolean]
+   [:format-error {:description "Error message if formatting failed" :optional true} :string]])
+
+(def ^:private read-meta-result-schema
+  "Schema for read-meta operation results."
+  [:map
+   [:path {:description "Absolute path to the file"} :string]
+   [:exists? {:description "True if file exists on disk"} :boolean]
+   [:loc {:description "Line count (only present if file exists)" :optional true} :int]
+   [:modified {:description "Last modification timestamp (only if exists)" :optional true} inst?]
+   [:namespace {:description "Inferred Clojure namespace symbol (only for .clj/.cljc/.cljs files)" :optional true}
+    [:maybe :symbol]]])
+
+(def ^:private reload-result-schema
+  "Schema for reload operation results."
+  [:map
+   [:executor {:description "Reload executor type used, or nil if none configured"} [:maybe :keyword]]
+   [:requested {:description "Set of namespaces that were requested for reload"} [:set :symbol]]
+   [:reloaded {:description "Set of namespaces successfully reloaded"} [:set :symbol]]
+   [:failed {:description "Map of namespace to error for failed reloads"} [:map-of :symbol :any]]
+   [:skipped {:description "Set of namespaces skipped (not found, etc.)"} [:set :symbol]]
+   [:pending-remaining {:description "Namespaces still pending after this reload"} [:set :symbol]]])
+
+(def ^:private clear-pending-result-schema
+  "Schema for clear-pending operation results."
+  [:map
+   [:cleared {:description "Set of namespaces removed from pending set"} [:set :symbol]]
+   [:remaining {:description "Set of namespaces still pending after clear"} [:set :symbol]]])
+
 (defn registry
   "Create a phandaal registry for file operation effects.
 
@@ -113,76 +168,198 @@
   (let [opts (assoc opts :source-paths source-paths)]
     {::s/effects
      {::write
-      {::s/description "Replace entire file contents with metadata tracking"
+      {::s/description "Write content to a file, replacing any existing content. Creates parent directories if :create-dirs? is true. Tracks line counts and optionally checks against a threshold limit. For Clojure source files, infers the namespace and adds it to the pending reload set."
        ::s/schema [:tuple
                    [:= ::write]
                    [:map
-                    [:path :string]
-                    [:content :string]
-                    [:create-dirs? {:optional true} :boolean]
-                    [:threshold {:optional true} :int]]]
+                    [:path {:description "Absolute path to the target file"} :string]
+                    [:content {:description "Complete file contents to write"} :string]
+                    [:create-dirs? {:optional true :description "Create parent directories if they don't exist (default false)"} :boolean]
+                    [:threshold {:optional true :description "Line count limit; if exceeded, :threshold in result shows details"} :int]]]
+       :returns file-result-schema
+       :examples [{:desc "Write a new Clojure namespace"
+                   :effect [::write {:path "/project/src/app/core.clj"
+                                     :content "(ns app.core)\n\n(defn greet [name]\n  (str \"Hello, \" name))"
+                                     :create-dirs? true}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :created
+                             :hints []
+                             :loc {:before nil :after 4 :delta nil}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}
+                  {:desc "Write with threshold check"
+                   :effect [::write {:path "/project/src/app/big.clj"
+                                     :content "(ns app.big)\n;; ... 150 lines ..."
+                                     :threshold 100}]
+                   :returns {:path "/project/src/app/big.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 50 :after 150 :delta 100}
+                             :threshold {:limit 100 :exceeded? true :remaining -50}
+                             :reload {:namespaces ['app.big] :type :clj-reload}}}]
        ::s/handler (effects/make-write-handler opts)}
 
       ::append
-      {::s/description "Append content to end of file with metadata tracking"
+      {::s/description "Append content to the end of an existing file. Does not add a newline before the content - include leading newline in content if needed. Tracks line counts and optionally checks against a threshold limit."
        ::s/schema [:tuple
                    [:= ::append]
                    [:map
-                    [:path :string]
-                    [:content :string]
-                    [:threshold {:optional true} :int]]]
+                    [:path {:description "Absolute path to the target file"} :string]
+                    [:content {:description "Content to append (include leading newline if needed)"} :string]
+                    [:threshold {:optional true :description "Line count limit for the resulting file"} :int]]]
+       :returns file-result-schema
+       :examples [{:desc "Append a function to existing file"
+                   :effect [::append {:path "/project/src/app/core.clj"
+                                      :content "\n\n(defn farewell [name]\n  (str \"Goodbye, \" name))"}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 4 :after 7 :delta 3}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-append-handler opts)}
 
       ::insert
-      {::s/description "Insert content at specific location with metadata tracking"
+      {::s/description "Insert content at a specific location in an existing file. Location is specified via :at with one of: {:line N} for 1-based line number, {:after pattern} to insert after first matching line, or {:before pattern} to insert before first matching line. Patterns can be literal strings or regex patterns."
        ::s/schema [:tuple
                    [:= ::insert]
                    [:map
-                    [:path :string]
-                    [:content :string]
-                    [:at [:or
-                          [:map [:line :int]]
-                          [:map [:after [:or :string :any]]]
-                          [:map [:before [:or :string :any]]]]]
-                    [:threshold {:optional true} :int]]]
+                    [:path {:description "Absolute path to the target file (must exist)"} :string]
+                    [:content {:description "Content to insert (may be multiple lines)"} :string]
+                    [:at {:description "Insertion point specification"}
+                     [:or
+                      [:map [:line {:description "1-based line number to insert before"} :int]]
+                      [:map [:after {:description "Insert after first line matching this string or regex"}
+                             [:or :string [:fn {:description "java.util.regex.Pattern"} #(instance? java.util.regex.Pattern %)]]]]
+                      [:map [:before {:description "Insert before first line matching this string or regex"}
+                             [:or :string [:fn {:description "java.util.regex.Pattern"} #(instance? java.util.regex.Pattern %)]]]]]]
+                    [:threshold {:optional true :description "Line count limit for the resulting file"} :int]]]
+       :returns file-result-schema
+       :examples [{:desc "Insert after namespace declaration"
+                   :effect [::insert {:path "/project/src/app/core.clj"
+                                      :content "\n(require '[clojure.string :as str])"
+                                      :at {:after "(ns app.core)"}}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 4 :after 6 :delta 2}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}
+                  {:desc "Insert at specific line"
+                   :effect [::insert {:path "/project/src/app/core.clj"
+                                      :content ";; Copyright 2024"
+                                      :at {:line 1}}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 4 :after 5 :delta 1}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-insert-handler opts)}
 
       ::replace
-      {::s/description "Find and replace within file with metadata tracking"
+      {::s/description "Find and replace text within an existing file. The :find pattern can be a literal string or a regex pattern. By default replaces only the first match; set :all? true to replace all occurrences."
        ::s/schema [:tuple
                    [:= ::replace]
                    [:map
-                    [:path :string]
-                    [:find [:or :string :any]]
-                    [:replacement :string]
-                    [:all? {:optional true} :boolean]]]
+                    [:path {:description "Absolute path to the target file (must exist)"} :string]
+                    [:find {:description "Pattern to find: literal string or java.util.regex.Pattern"}
+                     [:or :string [:fn {:description "java.util.regex.Pattern"} #(instance? java.util.regex.Pattern %)]]]
+                    [:replacement {:description "Text to replace matches with"} :string]
+                    [:all? {:optional true :description "Replace all occurrences (default false, first match only)"} :boolean]]]
+       :returns file-result-schema
+       :examples [{:desc "Rename a function"
+                   :effect [::replace {:path "/project/src/app/core.clj"
+                                       :find "defn greet"
+                                       :replacement "defn say-hello"
+                                       :all? true}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 4 :after 4 :delta 0}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}
+                  {:desc "Replace with regex"
+                   :effect [::replace {:path "/project/src/app/core.clj"
+                                       :find #"TODO:.*"
+                                       :replacement "DONE"
+                                       :all? true}]
+                   :returns {:path "/project/src/app/core.clj"
+                             :status :ok
+                             :hints []
+                             :loc {:before 10 :after 8 :delta -2}
+                             :reload {:namespaces ['app.core] :type :clj-reload}}}]
        ::s/handler (effects/make-replace-handler opts)}
 
       ::read-meta
-      {::s/description "Get file metadata without reading full content"
-       ::s/schema [:tuple [:= ::read-meta] :string]
+      {::s/description "Get metadata about a file without reading its full content. Returns existence status, line count, modification time, and inferred namespace for Clojure files. Useful for checking file state before deciding on an operation."
+       ::s/schema [:tuple
+                   [:= ::read-meta]
+                   [:string {:description "Absolute path to the file to inspect"}]]
+       :returns read-meta-result-schema
+       :examples [{:desc "Check existing Clojure file"
+                   :effect [::read-meta "/project/src/app/core.clj"]
+                   :returns {:path "/project/src/app/core.clj"
+                             :exists? true
+                             :loc 42
+                             :modified #inst "2024-01-15T10:30:00Z"
+                             :namespace 'app.core}}
+                  {:desc "Check non-existent file"
+                   :effect [::read-meta "/project/src/app/missing.clj"]
+                   :returns {:path "/project/src/app/missing.clj"
+                             :exists? false}}]
        ::s/handler (effects/make-read-meta-handler opts)}
 
       ::reload
-      {::s/description "Reload pending namespaces using configured executor"
+      {::s/description "Reload namespaces that have pending changes. File effects (write, append, insert, replace) automatically track modified Clojure namespaces. This effect triggers the configured :reload-executor to reload them. Use :only to reload a subset of pending namespaces. Requires pending-reloads-interceptor in the dispatch chain."
        ::s/schema [:tuple
                    [:= ::reload]
                    [:map
-                    [:only {:optional true} [:set :symbol]]]]
+                    [:only {:optional true :description "Subset of pending namespaces to reload; omit to reload all pending"}
+                     [:set :symbol]]]]
+       :returns reload-result-schema
+       :see-also [::clear-pending ::pending-reloads]
+       :examples [{:desc "Reload all pending namespaces"
+                   :effect [::reload {}]
+                   :returns {:executor :clj-reload
+                             :requested #{'app.core 'app.routes}
+                             :reloaded #{'app.core 'app.routes}
+                             :failed {}
+                             :skipped #{}
+                             :pending-remaining #{}}}
+                  {:desc "Reload specific namespace only"
+                   :effect [::reload {:only #{'app.core}}]
+                   :returns {:executor :clj-reload
+                             :requested #{'app.core}
+                             :reloaded #{'app.core}
+                             :failed {}
+                             :skipped #{}
+                             :pending-remaining #{'app.routes}}}]
        ::s/handler (make-reload-handler opts)}
 
       ::clear-pending
-      {::s/description "Clear namespaces from pending reload set"
+      {::s/description "Remove namespaces from the pending reload set without reloading them. Useful when you want to discard pending reloads (e.g., after reverting file changes) or manage the pending set manually. Use :only to clear specific namespaces, or :all true to clear everything."
        ::s/schema [:tuple
                    [:= ::clear-pending]
                    [:map
-                    [:only {:optional true} [:set :symbol]]
-                    [:all {:optional true} :boolean]]]
+                    [:only {:optional true :description "Specific namespaces to remove from pending set"}
+                     [:set :symbol]]
+                    [:all {:optional true :description "Clear all pending namespaces (default false)"} :boolean]]]
+       :returns clear-pending-result-schema
+       :see-also [::reload ::pending-reloads]
+       :examples [{:desc "Clear all pending"
+                   :effect [::clear-pending {:all true}]
+                   :returns {:cleared #{'app.core 'app.routes}
+                             :remaining #{}}}
+                  {:desc "Clear specific namespace"
+                   :effect [::clear-pending {:only #{'app.core}}]
+                   :returns {:cleared #{'app.core}
+                             :remaining #{'app.routes}}}]
        ::s/handler (make-clear-pending-handler opts)}}
 
      ::s/placeholders
      {::pending-reloads
-      {::s/description "Get the set of namespaces pending reload"
+      {::s/description "Returns the set of namespace symbols pending reload. Namespaces are added automatically when file effects modify Clojure source files (.clj, .cljc, .cljs). Use ::reload to reload them or ::clear-pending to discard. Requires pending-reloads-interceptor in the dispatch chain."
+       :returns [:set :symbol]
+       :see-also [::reload ::clear-pending]
+       :examples [{:desc "Check pending namespaces"
+                   :usage "[::pending-reloads]"
+                   :returns #{'app.core 'app.routes}}]
        ::s/handler (fn [dispatch-data]
                      (when-let [atom (::pending-reloads-atom dispatch-data)]
                        @atom))}}}))
