@@ -131,19 +131,19 @@ Implement the foundational file operation effects for phandaal. These form the b
 - [x] Unit tests for `phandaal.ns` namespace inference
   - Various source path configurations
   - Edge cases (files outside source paths, non-Clojure files)
-- [ ] Unit tests for `phandaal.format` utilities
+- [x] Unit tests for `phandaal.format` utilities
   - `sh` helper success case
   - `sh` helper failure (non-zero exit)
-  - `sh` helper with special characters in path
 - [x] Integration tests for each effect
   - Write/append/insert/replace happy paths
   - Threshold exceeded scenarios
   - Error handling (permission denied, disk full simulation)
-- [ ] Integration tests with formatting
+- [x] Integration tests with formatting
   - Effect with formatter configured
   - Effect without formatter (no-op)
   - Formatter failure doesn't fail write
   - LOC reflects formatted output
+  - cljfmt integration tests
 - [x] Test result shape consistency across all effects
 
 ## Phase 7: Documentation
