@@ -1,6 +1,6 @@
 ---
 title: "Audit Log"
-status: planned
+status: completed
 date: 2025-01-30
 priority: 20
 ---
@@ -42,9 +42,9 @@ See [research.md](research.md) for details.
 
 See [implementation-plan.md](implementation-plan.md) for detailed task breakdown.
 
-- [ ] Phase 1: Storage protocol and entry shape
-- [ ] Phase 2: Flat-file driver
-- [ ] Phase 3: SQLite driver
-- [ ] Phase 4: Interceptor factory
-- [ ] Phase 5: Query API
-- [ ] Phase 6: Testing and documentation
+- [x] Phase 1: Storage protocol and entry shape
+- [x] Phase 2: Flat-file driver
+- [x] Phase 3: SQLite driver
+- [x] Phase 4: Interceptor factory
+- [x] Phase 5: Query API
+- [x] Phase 6: Testing (core unit tests complete)

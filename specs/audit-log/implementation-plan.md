@@ -6,13 +6,13 @@ Implement the audit logging system with pluggable storage backends. This builds 
 
 ## Prerequisites
 
-- [ ] Core primitives spec implemented (or at least result shape defined)
-- [ ] Sandestin interceptor infrastructure understood
+- [x] Core primitives spec implemented (or at least result shape defined)
+- [x] Sandestin interceptor infrastructure understood
 
 ## Phase 1: Storage Protocol and Entry Shape
 
-- [ ] Define `AuditStorage` protocol in `ascolais.phandaal.storage`
-- [ ] Define entry schema in malli:
+- [x] Define `AuditStorage` protocol in `ascolais.phandaal.storage`
+- [x] Define entry schema in malli:
   ```clojure
   [:map
    [:id :uuid]
@@ -25,39 +25,39 @@ Implement the audit logging system with pluggable storage backends. This builds 
    [:hints [:vector :map]]
    [:status :keyword]]
   ```
-- [ ] Implement `build-entry` helper that extracts/denormalizes fields
-- [ ] Implement content truncation utility
+- [x] Implement `build-entry` helper that extracts/denormalizes fields
+- [x] Implement content truncation utility
 
 ## Phase 2: Flat-File Driver
 
-- [ ] Create `ascolais.phandaal.storage.file` namespace
-- [ ] Implement `create` factory function
-- [ ] Implement `append!`:
+- [x] Create `ascolais.phandaal.storage.file` namespace
+- [x] Implement `create` factory function
+- [x] Implement `append!`:
   - Open file in append mode
   - Write EDN + newline
   - Flush/fsync
   - Close
-- [ ] Implement `query`:
+- [x] Implement `query`:
   - Read all lines
   - Parse each as EDN
   - Apply filters (since, until, session-id, effect-key, file-path, status)
   - Sort by ts descending
   - Apply limit
-- [ ] Implement `clear!`:
+- [x] Implement `clear!`:
   - For `:all true`: truncate file
   - For `:before inst`: read, filter, rewrite
-- [ ] Handle file creation if doesn't exist
-- [ ] Handle concurrent access (file locking or accept eventual consistency)
+- [x] Handle file creation if doesn't exist
+- [x] Handle concurrent access (file locking or accept eventual consistency)
 
 ## Phase 3: SQLite Driver
 
-- [ ] Add next.jdbc and SQLite dependencies (optional, loaded dynamically?)
-- [ ] Create `ascolais.phandaal.storage.sqlite` namespace
-- [ ] Implement `create` factory:
+- [x] Add next.jdbc and SQLite dependencies (optional, loaded dynamically?)
+- [x] Create `ascolais.phandaal.storage.sqlite` namespace
+- [x] Implement `create` factory:
   - Create/open database
   - Run schema migrations
   - Return storage instance
-- [ ] Define schema:
+- [x] Define schema:
   ```sql
   CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
@@ -72,33 +72,33 @@ Implement the audit logging system with pluggable storage backends. This builds 
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
   ```
-- [ ] Create indexes for common query patterns
-- [ ] Implement `append!` with prepared statement
-- [ ] Implement `query` with dynamic SQL building
-- [ ] Implement `clear!` with DELETE statements
-- [ ] Connection pooling (single connection sufficient for most use cases)
+- [x] Create indexes for common query patterns
+- [x] Implement `append!` with prepared statement
+- [x] Implement `query` with dynamic SQL building
+- [x] Implement `clear!` with DELETE statements
+- [x] Connection pooling (single connection sufficient for most use cases)
 
 ## Phase 4: Interceptor Factory
 
-- [ ] Create `ascolais.phandaal.interceptors` namespace
-- [ ] Implement `audit-log` interceptor factory:
+- [x] Create `ascolais.phandaal.interceptors` namespace
+- [x] Implement `audit-log` interceptor factory:
   ```clojure
   (defn audit-log [storage & opts])
   ```
-- [ ] Implement effect detection (is this a phandaal effect?)
-- [ ] Implement `after-effect` handler:
+- [x] Implement effect detection (is this a phandaal effect?)
+- [x] Implement `after-effect` handler:
   - Check if effect is phandaal operation
   - Check effect-filter predicate
   - Build entry from context
   - Append to storage
-- [ ] Support options:
+- [x] Support options:
   - `:effect-filter` - predicate for selective logging
   - `:content-limit` - truncation threshold
-  - `:async?` - write in background (future enhancement)
+  - [ ] `:async?` - write in background (future enhancement)
 
 ## Phase 5: Query API
 
-- [ ] Create convenience functions in main namespace:
+- [x] Create convenience functions in main namespace:
   ```clojure
   (phandaal/recent-activity storage)        ;; Last 24 hours
   (phandaal/session-activity storage id)    ;; Specific session
@@ -106,15 +106,15 @@ Implement the audit logging system with pluggable storage backends. This builds 
   (phandaal/warnings storage)               ;; Entries with hints
   ```
 - [ ] Implement pretty-print for REPL inspection
-- [ ] Support EDN output for programmatic use
+- [x] Support EDN output for programmatic use
 
 ## Phase 6: Testing
 
 ### Unit Tests
-- [ ] Entry building and truncation
-- [ ] File driver append/query/clear
+- [x] Entry building and truncation
+- [x] File driver append/query/clear
 - [ ] SQLite driver append/query/clear
-- [ ] Query filtering logic
+- [x] Query filtering logic
 
 ### Integration Tests
 - [ ] Interceptor integration with sandestin dispatch
@@ -123,14 +123,14 @@ Implement the audit logging system with pluggable storage backends. This builds 
 - [ ] Concurrent access behavior
 
 ### Edge Cases
-- [ ] Empty log queries
-- [ ] Very large entries (content truncation)
-- [ ] Malformed existing log files (graceful handling)
-- [ ] Missing log file (auto-create)
+- [x] Empty log queries
+- [x] Very large entries (content truncation)
+- [x] Malformed existing log files (graceful handling)
+- [x] Missing log file (auto-create)
 
 ## Phase 7: Documentation
 
-- [ ] Docstrings for protocol and all public functions
+- [x] Docstrings for protocol and all public functions
 - [ ] README section on audit logging:
   - Setup with flat-file (default)
   - Upgrade to SQLite
