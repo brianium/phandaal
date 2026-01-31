@@ -1,7 +1,8 @@
 (ns ascolais.phandaal
   "Phandaal - Sandestin effect library for source file modifications with metadata tracking."
   (:require [ascolais.sandestin :as s]
-            [ascolais.phandaal.effects :as effects]))
+            [ascolais.phandaal.effects :as effects]
+            [ascolais.phandaal.storage :as storage]))
 
 (defn registry
   "Create a phandaal registry for file operation effects.
@@ -87,3 +88,71 @@
        ::s/handler (fn [dispatch-data]
                      (when-let [atom (::pending-reloads-atom dispatch-data)]
                        @atom))}}}))
+
+;; =============================================================================
+;; Audit Log Query Convenience Functions
+;; =============================================================================
+
+(defn recent-activity
+  "Query recent audit log activity.
+
+   Arguments:
+   - storage - An AuditStorage implementation
+
+   Options:
+   - :hours - Hours to look back (default 24)
+   - :limit - Max entries to return (default 100)
+
+   Returns vector of entries, newest first."
+  [storage & {:keys [hours limit] :or {hours 24 limit 100}}]
+  (let [since (java.util.Date.
+               (- (System/currentTimeMillis) (* hours 60 60 1000)))]
+    (storage/query storage {:since since :limit limit})))
+
+(defn session-activity
+  "Query audit log activity for a specific session.
+
+   Arguments:
+   - storage - An AuditStorage implementation
+   - session-id - Session identifier string
+
+   Options:
+   - :limit - Max entries to return (default 100)
+
+   Returns vector of entries, newest first."
+  [storage session-id & {:keys [limit] :or {limit 100}}]
+  (storage/query storage {:session-id session-id :limit limit}))
+
+(defn file-history
+  "Query audit log history for a specific file.
+
+   Arguments:
+   - storage - An AuditStorage implementation
+   - path - File path (prefix match supported)
+
+   Options:
+   - :limit - Max entries to return (default 100)
+
+   Returns vector of entries, newest first."
+  [storage path & {:keys [limit] :or {limit 100}}]
+  (storage/query storage {:file-path path :limit limit}))
+
+(defn warnings
+  "Query audit log entries that have hints (warnings/threshold exceeded).
+
+   Arguments:
+   - storage - An AuditStorage implementation
+
+   Options:
+   - :hours - Hours to look back (default 24)
+   - :limit - Max entries to return (default 100)
+
+   Returns vector of entries with non-empty hints, newest first."
+  [storage & {:keys [hours limit] :or {hours 24 limit 100}}]
+  (let [since (java.util.Date.
+               (- (System/currentTimeMillis) (* hours 60 60 1000)))
+        entries (storage/query storage {:since since :limit (* limit 10)})]
+    (->> entries
+         (filter #(seq (:hints %)))
+         (take limit)
+         vec)))
