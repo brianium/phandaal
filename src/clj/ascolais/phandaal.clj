@@ -2,7 +2,84 @@
   "Phandaal - Sandestin effect library for source file modifications with metadata tracking."
   (:require [ascolais.sandestin :as s]
             [ascolais.phandaal.effects :as effects]
-            [ascolais.phandaal.storage :as storage]))
+            [ascolais.phandaal.storage :as storage]
+            [ascolais.phandaal.reload :as reload]
+            [clojure.set :as set]))
+
+;; =============================================================================
+;; Pending Reloads Interceptor
+;; =============================================================================
+
+(def pending-reloads-interceptor
+  "Interceptor that initializes and manages the pending reloads atom in dispatch-data.
+   Add this to your dispatch interceptors for reload tracking to work."
+  {:id ::pending-reloads
+   :before-dispatch
+   (fn [ctx]
+     (if (get-in ctx [:dispatch-data ::pending-reloads-atom])
+       ctx  ; Already initialized
+       (assoc-in ctx [:dispatch-data ::pending-reloads-atom] (atom #{}))))})
+
+;; =============================================================================
+;; Reload Effect Handlers
+;; =============================================================================
+
+(defn- make-reload-handler
+  "Create handler for ::phandaal/reload effect."
+  [{:keys [reload-executor]}]
+  (fn [{:keys [dispatch-data]} _system {:keys [only]}]
+    (let [pending-atom (::pending-reloads-atom dispatch-data)
+          pending (if pending-atom @pending-atom #{})
+          to-reload (if only
+                      (set/intersection pending only)
+                      pending)]
+      (if (empty? to-reload)
+        {:executor (when reload-executor (:type reload-executor))
+         :requested #{}
+         :reloaded #{}
+         :failed {}
+         :skipped #{}
+         :pending-remaining pending}
+        (if-not reload-executor
+          {:error :no-executor
+           :message "No :reload-executor configured in registry options"
+           :pending pending}
+          (let [result (reload/execute reload-executor to-reload)
+                reloaded (:reloaded result)
+                remaining (set/difference pending reloaded)]
+            ;; Update pending set to remove successfully reloaded
+            (when pending-atom
+              (swap! pending-atom (fn [p] (set/difference p reloaded))))
+            {:executor (:type reload-executor)
+             :requested to-reload
+             :reloaded reloaded
+             :failed (:failed result)
+             :skipped (:skipped result)
+             :pending-remaining remaining}))))))
+
+(defn- make-clear-pending-handler
+  "Create handler for ::phandaal/clear-pending effect."
+  [_opts]
+  (fn [{:keys [dispatch-data]} _system {:keys [only all]}]
+    (let [pending-atom (::pending-reloads-atom dispatch-data)
+          pending (if pending-atom @pending-atom #{})]
+      (cond
+        all
+        (do
+          (when pending-atom (reset! pending-atom #{}))
+          {:cleared pending
+           :remaining #{}})
+
+        only
+        (let [to-clear (set/intersection pending only)]
+          (when pending-atom
+            (swap! pending-atom (fn [p] (set/difference p to-clear))))
+          {:cleared to-clear
+           :remaining (set/difference pending to-clear)})
+
+        :else
+        {:cleared #{}
+         :remaining pending}))))
 
 (defn registry
   "Create a phandaal registry for file operation effects.
@@ -14,17 +91,21 @@
    - :default-threshold (optional) - Default line threshold for all operations
    - :formatters (optional) - Map of file extension to formatter function
                               e.g. {\".clj\" (phandaal.format/sh \"cljfmt fix {path}\")}
+   - :reload-executor (optional) - Reload executor for ::phandaal/reload effect
+                                   Use presets from ascolais.phandaal.reload:
+                                   clj-reload, tools-namespace, require-reload, noop
 
    Example:
      (def dispatch
        (s/create-dispatch
          [[phandaal/registry {:project-root \"/project\"
                               :source-paths [\"src/clj\"]
-                              :formatters {\".clj\" my-formatter}}]]))
+                              :formatters {\".clj\" my-formatter}
+                              :reload-executor phandaal.reload/clj-reload}]]))
 
      (dispatch {} {} [[::phandaal/write {:path \"/project/src/clj/app/core.clj\"
                                           :content \"(ns app.core)\"}]])"
-  [{:keys [project-root source-paths default-threshold formatters]
+  [{:keys [project-root source-paths default-threshold formatters reload-executor]
     :or {source-paths ["src"]}
     :as opts}]
   (when-not project-root
@@ -80,7 +161,24 @@
       ::read-meta
       {::s/description "Get file metadata without reading full content"
        ::s/schema [:tuple [:= ::read-meta] :string]
-       ::s/handler (effects/make-read-meta-handler opts)}}
+       ::s/handler (effects/make-read-meta-handler opts)}
+
+      ::reload
+      {::s/description "Reload pending namespaces using configured executor"
+       ::s/schema [:tuple
+                   [:= ::reload]
+                   [:map
+                    [:only {:optional true} [:set :symbol]]]]
+       ::s/handler (make-reload-handler opts)}
+
+      ::clear-pending
+      {::s/description "Clear namespaces from pending reload set"
+       ::s/schema [:tuple
+                   [:= ::clear-pending]
+                   [:map
+                    [:only {:optional true} [:set :symbol]]
+                    [:all {:optional true} :boolean]]]
+       ::s/handler (make-clear-pending-handler opts)}}
 
      ::s/placeholders
      {::pending-reloads

@@ -17,8 +17,8 @@
 (defn- track-reload!
   "Track namespace for pending reload in dispatch-data atom."
   [dispatch-data namespace]
-  (when (and namespace (::pending-reloads-atom dispatch-data))
-    (swap! (::pending-reloads-atom dispatch-data)
+  (when (and namespace (:ascolais.phandaal/pending-reloads-atom dispatch-data))
+    (swap! (:ascolais.phandaal/pending-reloads-atom dispatch-data)
            (fnil conj #{})
            namespace)))
 
