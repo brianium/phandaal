@@ -1,6 +1,6 @@
 ---
 title: "Reload Tracking"
-status: planned
+status: completed
 date: 2025-01-30
 priority: 30
 ---
@@ -42,8 +42,8 @@ See [research.md](research.md) for details.
 
 See [implementation-plan.md](implementation-plan.md) for detailed task breakdown.
 
-- [ ] Phase 1: Pending reload tracking
-- [ ] Phase 2: Executor protocol and presets
-- [ ] Phase 3: Reload effect
+- [x] Phase 1: Pending reload tracking
+- [x] Phase 2: Executor protocol and presets
+- [x] Phase 3: Reload effect
 - [ ] Phase 4: After-dispatch interceptor (optional)
-- [ ] Phase 5: Testing and documentation
+- [x] Phase 5: Testing and documentation
