@@ -1,6 +1,6 @@
 ---
 title: "Core Primitives"
-status: planned
+status: in-progress
 date: 2025-01-30
 priority: 10
 ---
@@ -44,10 +44,10 @@ See [research.md](research.md) for details.
 
 See [implementation-plan.md](implementation-plan.md) for detailed task breakdown.
 
-- [ ] Phase 1: Project setup and result shape
-- [ ] Phase 2: Core file effects
-- [ ] Phase 3: Namespace tracking
-- [ ] Phase 4: Formatting
-- [ ] Phase 5: Registry factory
-- [ ] Phase 6: Testing
-- [ ] Phase 7: Documentation
+- [x] Phase 1: Project setup and result shape
+- [x] Phase 2: Core file effects
+- [x] Phase 3: Namespace tracking
+- [x] Phase 4: Formatting
+- [x] Phase 5: Registry factory
+- [x] Phase 6: Testing (core tests complete, formatter tests remaining)
+- [ ] Phase 7: Documentation (README.md for library)
