@@ -241,6 +241,118 @@ Effects track which namespaces need reloading in dispatch-data. Access via place
 [::my-effect [::phandaal/pending-reloads]]
 ```
 
+## Audit Logging
+
+Phandaal provides a pluggable audit logging system to track all file modifications.
+
+### Setup
+
+```clojure
+(require '[ascolais.phandaal :as phandaal]
+         '[ascolais.phandaal.storage.file :as file-storage]
+         '[ascolais.phandaal.interceptors :as phandaal-int]
+         '[ascolais.sandestin :as s])
+
+;; Create storage (flat-file EDN, zero dependencies)
+(def audit-storage
+  (file-storage/create {:path ".phandaal/audit.edn"}))
+
+;; Add interceptor to dispatch
+(def dispatch
+  (s/create-dispatch
+    {:registries [(phandaal/registry {:project-root "/project"})]
+     ::s/interceptors [(phandaal-int/audit-log audit-storage
+                         :content-limit 1000
+                         :session-id "my-session")]}))
+```
+
+### Storage Backends
+
+**Flat-file (default)** - Zero dependencies, human-readable, greppable:
+
+```clojure
+(require '[ascolais.phandaal.storage.file :as file-storage])
+(def storage (file-storage/create {:path ".phandaal/audit.edn"}))
+```
+
+**SQLite** - Indexed queries for large logs (requires next.jdbc + sqlite-jdbc):
+
+```clojure
+(require '[ascolais.phandaal.storage.sqlite :as sqlite-storage])
+(def storage (sqlite-storage/create {:path ".phandaal/audit.db"}))
+```
+
+Add to deps.edn for SQLite:
+```clojure
+{:deps {com.github.seancorfield/next.jdbc {:mvn/version "1.3.939"}
+        org.xerial/sqlite-jdbc {:mvn/version "3.45.1.0"}}}
+```
+
+### Querying
+
+```clojure
+;; Recent activity (last 24 hours)
+(phandaal/recent-activity storage)
+(phandaal/recent-activity storage :hours 48 :limit 50)
+
+;; Session activity
+(phandaal/session-activity storage "my-session")
+
+;; File history
+(phandaal/file-history storage "/project/src/app/core.clj")
+
+;; Entries with warnings/hints
+(phandaal/warnings storage)
+```
+
+### Direct Protocol Access
+
+```clojure
+(require '[ascolais.phandaal.storage :as storage])
+
+;; Query with filters
+(storage/query storage
+  {:since #inst "2024-01-15"
+   :effect-key :ascolais.phandaal/write
+   :file-path "/project/src/"
+   :status :ok
+   :limit 100})
+
+;; Clear old entries
+(storage/clear! storage {:before #inst "2024-01-01"})
+(storage/clear! storage {:all true})
+```
+
+### Entry Shape
+
+Each audit entry contains:
+
+```clojure
+{:id #uuid "..."
+ :ts #inst "2024-01-15T10:23:00.000Z"
+ :session-id "my-session"           ; optional
+ :effect-key :ascolais.phandaal/write
+ :effect-args {:path "..." :content "..."}
+ :result {:status :ok :loc {...}}
+ :file-path "/project/src/app/core.clj"
+ :hints []
+ :status :ok}
+```
+
+### Custom Storage Backend
+
+Implement the `AuditStorage` protocol:
+
+```clojure
+(require '[ascolais.phandaal.storage :as storage])
+
+(defrecord MyStorage [...]
+  storage/AuditStorage
+  (append! [this entry] ...)
+  (query [this opts] ...)
+  (clear! [this opts] ...))
+```
+
 ## Error Handling
 
 Effects throw exceptions for:
