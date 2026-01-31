@@ -1,12 +1,12 @@
 # Specifications
 
-*Auto-generated on 2026-01-30 20:05*
-
-## In Progress
-
-- [Core Primitives](core-primitives/README.md)
+*Auto-generated on 2026-01-30 20:19*
 
 ## Planned
 
 - [Audit Log](audit-log/README.md)
 - [Reload Tracking](reload-tracking/README.md)
+
+## Completed
+
+- [Core Primitives](core-primitives/README.md)

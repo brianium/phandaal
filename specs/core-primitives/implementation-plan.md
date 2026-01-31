@@ -149,7 +149,7 @@ Implement the foundational file operation effects for phandaal. These form the b
 ## Phase 7: Documentation
 
 - [x] Docstrings for all public functions
-- [ ] README.md with:
+- [x] README.md with:
   - Quick start example
   - Effect reference table
   - Result shape documentation
